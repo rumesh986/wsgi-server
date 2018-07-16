@@ -13,6 +13,6 @@ Simple python WSGI server
       -D DIRECTORY, --directory=DIRECTORY
       
       
-This is just a simple python script you can run to quickly run a wsgi server on your system. You need to specify the port and dircetory containing `index.html` in order to run this script.
+This is just a simple python script you can run to quickly run a wsgi server on your system. You need to specify the port and dircetory containing `index.html` in order to run this script. Your site would also need a file titled `404.html` in the `resources` folder. Otherwise all the `404 NOT FOUND` responses would send `500 INTERNAL SERVER ERROR instead`.
 
 This program is licensed with GPL3
