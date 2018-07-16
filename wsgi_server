@@ -1,0 +1,104 @@
+#!/usr/bin/python3
+
+# Copyright (c) 2018 Rumesh Sudhaharan
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import socketserver
+import os
+import subprocess
+import wsgiref.simple_server as wsgi_server
+import wsgiref.util as wsgi_util
+from urllib.parse import parse_qs
+import sys
+from optparse import OptionParser
+
+parser = OptionParser(version="%prog 1.0")
+parser.add_option("-P", "--port")
+parser.add_option("-D", "--directory")
+
+(options, args) = parser.parse_args()
+
+os.chdir(options.directory)
+port = int(options.port)
+
+def wsgi_requests(environ, start_response):
+	requested_uri_full = wsgi_util.request_uri(environ, include_query=False)
+	uri_index = requested_uri_full.find(':' + str(port) + '/')
+	requested_uri = requested_uri_full[uri_index + 5:]
+	
+	if environ['REQUEST_METHOD'] == 'GET':
+		if requested_uri[:11] == '/resources/':
+			file_local_uri = requested_uri[1:]
+			if (os.path.isfile(file_local_uri)):
+				status = '200 OK'
+			else :
+				print("FILE NOT FOUND")
+				status = '404 NOT FOUND'
+				headers = [('Content-Type', 'text/html')]
+				file_to_send = open('resources/404.html')
+
+			file_ext = file_local_uri.rsplit('.', 1)[1]
+
+			if file_ext == 'js':
+				headers = [('Content-Type', 'text/javascript')]
+			elif file_ext == 'css':
+				headers = [('Content-Type', 'text/css')]
+			elif file_ext == 'html':
+				headers = [('Content-Type', 'text/html')]
+			else:
+				headers = [('Content-Type', 'text/plain')]
+
+			file_to_send = open(file_local_uri, "rb")
+		elif requested_uri == '/':
+			status = '200 OK'
+			headers = [('Content-Type', 'text/html')]
+	
+			file_to_send = open('index.html', "rb")
+		else:
+			print("FILE NOT FOUND")
+			print(requested_uri)
+			status = '404 NOT FOUND'
+			headers = [('Content-Type', 'text/html')]
+			file_to_send = open('resources/404.html', "rb")
+
+		start_response(status, headers)	
+		send_data = file_to_send.read()
+
+		return [send_data]
+	elif environ['REQUEST_METHOD'] == 'POST':
+		requested_uri = '.' + requested_uri
+		if (os.path.isfile(requested_uri)):
+			request = environ['wsgi.input'].read1(128)
+			data = parse_qs(request.decode("utf-8"))
+
+			command = requested_uri
+			for key, value in data.items():
+				command += ' --' + key + '=' + value[0]
+	
+			wsgi_ret_code = subprocess.check_output(command, shell=True)
+
+			status = '200 OK'
+			headers = [('Content-Type', 'text/plain')]
+			start_response(status, headers)
+			return [b'' + wsgi_ret_code]
+		else:
+			status = '404 NOT FOUND'
+			headers = [('Content-Type', 'text/plain')]
+			start_response(status, headers)
+			return [b'FILE NOT FOUND']
+
+httpd = wsgi_server.make_server('', port, wsgi_requests)
+print("Serving WSGI Server on port", port)
+httpd.serve_forever()
